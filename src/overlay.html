@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      width: 100vw;
+      height: 100vh;
+      background: rgba(255, 255, 255, 0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      cursor: pointer;
+      overflow: hidden;
+      border: 2px solid #4CAF50;
+    }
+    #translation {
+      color: #000;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.4;
+      text-align: center;
+      word-wrap: break-word;
+      max-width: 100%;
+      max-height: 100%;
+      overflow: auto;
+    }
+    #closeHint {
+      position: absolute;
+      bottom: 5px;
+      right: 5px;
+      font-size: 10px;
+      color: #666;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div id="translation">Loading translation...</div>
+  <div id="closeHint">Click to close</div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+    
+    const translationDiv = document.getElementById('translation');
+    
+    ipcRenderer.on('display-translation', (event, text) => {
+      translationDiv.textContent = text;
+    });
+
+    // Close overlay on click
+    document.body.addEventListener('click', () => {
+      window.close();
+    });
+  </script>
+</body>
+</html>
