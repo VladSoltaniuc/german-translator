@@ -1,5 +1,4 @@
-const { app, BrowserWindow, globalShortcut, screen, ipcMain } = require('electron');
-const screenshot = require('screenshot-desktop');
+const { app, BrowserWindow, globalShortcut, screen, ipcMain, desktopCapturer } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const Tesseract = require('tesseract.js');
@@ -54,7 +53,6 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
-  mainWindow.webContents.openDevTools();
 }
 
 function createSelectionWindow() {
@@ -227,8 +225,39 @@ app.whenReady().then(() => {
     }
     
     try {
-      // Take screenshot first
-      const imgBuffer = await screenshot({ format: 'png' });
+      // Minimize main window before taking screenshot
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.minimize();
+      }
+      
+      // Small delay to let the window minimize
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Get primary display dimensions
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { width, height } = primaryDisplay.size;
+      const scaleFactor = primaryDisplay.scaleFactor;
+      
+      // Use Electron's desktopCapturer for reliable screen capture
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { 
+          width: Math.floor(width * scaleFactor), 
+          height: Math.floor(height * scaleFactor) 
+        }
+      });
+      
+      if (sources.length === 0) {
+        throw new Error('No screen sources found');
+      }
+      
+      // Get the primary screen (first source, or find by display id)
+      const primarySource = sources.find(s => s.display_id === String(primaryDisplay.id)) || sources[0];
+      
+      // Convert thumbnail to PNG buffer
+      const thumbnail = primarySource.thumbnail;
+      const imgBuffer = thumbnail.toPNG();
+      
       const tempPath = path.join(app.getPath('temp'), 'screenshot.png');
       fs.writeFileSync(tempPath, imgBuffer);
       
@@ -242,6 +271,10 @@ app.whenReady().then(() => {
       
     } catch (err) {
       console.error('Screenshot failed:', err);
+      // Restore main window on error
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.restore();
+      }
     }
   });
 
@@ -304,8 +337,10 @@ app.whenReady().then(() => {
       selectionWindow = null;
     }
     
-    // Send bounds to main window for processing
+    // Restore and focus main window
     if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.restore();
+      mainWindow.focus();
       mainWindow.webContents.send('process-selection', bounds);
     }
   });
@@ -316,6 +351,12 @@ app.whenReady().then(() => {
     if (selectionWindow && !selectionWindow.isDestroyed()) {
       selectionWindow.close();
       selectionWindow = null;
+    }
+    
+    // Restore main window when cancelled
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.restore();
+      mainWindow.focus();
     }
   });
 
