@@ -3,28 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    * {
+    *, html, body {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
     body {
       cursor: crosshair;
-      overflow: hidden;
     }
     #canvas {
       display: block;
-      width: 100vw;
-      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
     }
     #selection {
-      position: absolute;
+      position: fixed;
       border: 2px solid #00ff00;
       background: rgba(0, 255, 0, 0.1);
       display: none;
+      pointer-events: none;
+      z-index: 10;
     }
     #hint {
-      position: absolute;
+      position: fixed;
       top: 20px;
       left: 50%;
       transform: translateX(-50%);
@@ -34,13 +43,14 @@
       border-radius: 4px;
       font-family: Arial, sans-serif;
       font-size: 14px;
+      z-index: 20;
     }
   </style>
 </head>
 <body>
-  <div id="hint">Click and drag to select area • ESC to cancel</div>
   <canvas id="canvas"></canvas>
   <div id="selection"></div>
+  <div id="hint">Click and drag to select area • ESC to cancel</div>
 
   <script>
     const { ipcRenderer } = require('electron');
@@ -53,8 +63,9 @@
     let screenshotPath;
     let isSelecting = false;
     let startX, startY;
+    let imgWidth, imgHeight;
     
-    // Set canvas size
+    // Set canvas size to match window
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     
@@ -63,10 +74,13 @@
       screenshotPath = imagePath;
       const img = new Image();
       img.onload = () => {
-        // Store original dimensions
-        window.originalWidth = img.width;
-        window.originalHeight = img.height;
+        // Store original image dimensions (screenshot pixel size)
+        imgWidth = img.width;
+        imgHeight = img.height;
+        
+        // Draw the image scaled to fit the canvas
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
         // Darken the image
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -74,7 +88,7 @@
       img.src = imagePath;
     });
     
-    // Mouse down - start selection
+    // Mouse down - start selection (use clientX/Y directly since canvas is fixed at 0,0)
     canvas.addEventListener('mousedown', (e) => {
       isSelecting = true;
       startX = e.clientX;
@@ -94,40 +108,40 @@
       const currentX = e.clientX;
       const currentY = e.clientY;
       
-      const width = currentX - startX;
-      const height = currentY - startY;
+      // Calculate the selection rectangle bounds
+      const left = Math.min(startX, currentX);
+      const top = Math.min(startY, currentY);
+      const width = Math.abs(currentX - startX);
+      const height = Math.abs(currentY - startY);
       
-      if (width < 0) {
-        selection.style.left = currentX + 'px';
-        selection.style.width = Math.abs(width) + 'px';
-      } else {
-        selection.style.width = width + 'px';
-      }
-      
-      if (height < 0) {
-        selection.style.top = currentY + 'px';
-        selection.style.height = Math.abs(height) + 'px';
-      } else {
-        selection.style.height = height + 'px';
-      }
+      // Update selection box position
+      selection.style.left = left + 'px';
+      selection.style.top = top + 'px';
+      selection.style.width = width + 'px';
+      selection.style.height = height + 'px';
     });
     
     // Mouse up - complete selection
     canvas.addEventListener('mouseup', (e) => {
       if (!isSelecting) return;
+      isSelecting = false;
       
       const endX = e.clientX;
       const endY = e.clientY;
       
-      // Calculate scale factors
-      const scaleX = window.originalWidth / canvas.width;
-      const scaleY = window.originalHeight / canvas.height;
+      // Canvas display size (CSS pixels)
+      const displayWidth = canvas.offsetWidth;
+      const displayHeight = canvas.offsetHeight;
+      
+      // Calculate scale factors between canvas display size and actual image pixels
+      const scaleX = imgWidth / displayWidth;
+      const scaleY = imgHeight / displayHeight;
 
       const bounds = {
-        x: Math.min(startX, endX) * scaleX,
-        y: Math.min(startY, endY) * scaleY,
-        width: Math.abs(endX - startX) * scaleX,
-        height: Math.abs(endY - startY) * scaleY,
+        x: Math.round(Math.min(startX, endX) * scaleX),
+        y: Math.round(Math.min(startY, endY) * scaleY),
+        width: Math.round(Math.abs(endX - startX) * scaleX),
+        height: Math.round(Math.abs(endY - startY) * scaleY),
         screenshotPath: screenshotPath
       };
       

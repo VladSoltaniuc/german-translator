@@ -6,41 +6,6 @@ const https = require('https');
 
 let mainWindow;
 let selectionWindow;
-let translationService = 'libretranslate';
-
-// Path to store config
-const configPath = path.join(app.getPath('userData'), 'config.json');
-
-// Load translation service preference
-function loadTranslationService() {
-  try {
-    if (fs.existsSync(configPath)) {
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      translationService = config.translationService || 'libretranslate';
-      return translationService;
-    }
-  } catch (err) {
-    console.error('Error loading translation service:', err);
-  }
-  return 'libretranslate';
-}
-
-// Save translation service preference
-function saveTranslationService(service) {
-  try {
-    let config = {};
-    if (fs.existsSync(configPath)) {
-      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    }
-    config.translationService = service;
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-    translationService = service;
-    return true;
-  } catch (err) {
-    console.error('Error saving translation service:', err);
-    return false;
-  }
-}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -56,7 +21,8 @@ function createWindow() {
 }
 
 function createSelectionWindow() {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.size;
   
   selectionWindow = new BrowserWindow({
     width: width,
@@ -78,75 +44,20 @@ function createSelectionWindow() {
   selectionWindow.setFullScreen(true);
 }
 
-// Translate text using selected service
-async function translateText(text, service) {
-  if (service === 'libretranslate') {
-    return translateWithLibreTranslate(text);
-  } else if (service === 'mymemory') {
-    return translateWithMyMemory(text);
-  } else {
-    throw new Error('Unknown translation service');
-  }
-}
-
-// Translate with LibreTranslate (Free, Open Source)
-function translateWithLibreTranslate(text) {
+// Translate text using MyMemory (Free, No sign-up)
+function translateText(text) {
   return new Promise((resolve, reject) => {
-    const postData = JSON.stringify({
-      q: text,
-      source: 'de',
-      target: 'en',
-      format: 'text'
-    });
+    // MyMemory has a 500 character limit per request
+    const MAX_LENGTH = 500;
+    let textToTranslate = text.trim();
+    let wasTruncated = false;
     
-    const options = {
-      hostname: 'libretranslate.com',
-      path: '/translate',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData)
-      }
-    };
-
-    const req = https.request(options, (res) => {
-      let data = '';
-      
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      
-      res.on('end', () => {
-        if (res.statusCode === 200) {
-          try {
-            const response = JSON.parse(data);
-            if (response.translatedText) {
-              resolve(response.translatedText);
-            } else {
-              reject(new Error('No translation returned'));
-            }
-          } catch (err) {
-            reject(new Error('Failed to parse translation response'));
-          }
-        } else {
-          reject(new Error(`Translation failed: ${res.statusCode} - ${data}`));
-        }
-      });
-    });
-
-    req.on('error', (err) => {
-      reject(new Error(`Network error: ${err.message}`));
-    });
-
-    req.write(postData);
-    req.end();
-  });
-}
-
-// Translate with MyMemory (Free, No sign-up)
-function translateWithMyMemory(text) {
-  return new Promise((resolve, reject) => {
-    const encodedText = encodeURIComponent(text);
+    if (textToTranslate.length > MAX_LENGTH) {
+      textToTranslate = textToTranslate.substring(0, MAX_LENGTH);
+      wasTruncated = true;
+    }
+    
+    const encodedText = encodeURIComponent(textToTranslate);
     const path = `/get?q=${encodedText}&langpair=de|en`;
     
     const options = {
@@ -169,48 +80,50 @@ function translateWithMyMemory(text) {
         if (res.statusCode === 200) {
           try {
             const response = JSON.parse(data);
+            
+            // Check for API error messages
             if (response.responseData && response.responseData.translatedText) {
-              resolve(response.responseData.translatedText);
+              let translation = response.responseData.translatedText;
+              
+              // Check if it's an error message from the API
+              if (translation.includes('QUERY LENGTH LIMIT') || translation.includes('MYMEMORY WARNING')) {
+                reject(new Error('The selected text is too long. Please select a shorter text area.'));
+                return;
+              }
+              
+              // Add note if text was truncated
+              if (wasTruncated) {
+                translation += '\n\n[Note: Only the first 500 characters were translated due to service limits]';
+              }
+              resolve(translation);
+            } else if (response.responseStatus === 403) {
+              reject(new Error('Daily translation limit reached. Please try again later.'));
             } else {
-              reject(new Error('No translation returned'));
+              reject(new Error('Unable to translate. Please try again.'));
             }
           } catch (err) {
-            reject(new Error('Failed to parse translation response'));
+            reject(new Error('Unable to translate. Please check your internet connection.'));
           }
+        } else if (res.statusCode === 429) {
+          reject(new Error('Too many requests. Please wait a moment and try again.'));
+        } else if (res.statusCode === 403) {
+          reject(new Error('Daily translation limit reached. Please try again tomorrow.'));
         } else {
-          reject(new Error(`Translation failed: ${res.statusCode}`));
+          reject(new Error('Translation service unavailable. Please try again later.'));
         }
       });
     });
 
     req.on('error', (err) => {
-      reject(new Error(`Network error: ${err.message}`));
+      reject(new Error('Cannot connect to translation service. Please check your internet connection.'));
     });
 
     req.end();
   });
 }
 
-// Test translation service
-async function testTranslationService(service) {
-  try {
-    const testText = 'Hallo';
-    const result = await translateText(testText, service);
-    if (result && result.length > 0) {
-      return { success: true, message: `Service is working! Test: "${testText}" → "${result}"` };
-    } else {
-      return { success: false, message: 'Service returned empty result' };
-    }
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-}
-
 // Promise
 app.whenReady().then(() => {
-  // Load translation service on startup
-  loadTranslationService();
-  
   createWindow();
 
   // Register global shortcut Ctrl+Shift+T
@@ -300,31 +213,6 @@ app.whenReady().then(() => {
   // Unregister all shortcuts on quit
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
-  });
-
-  // Handle translation service loading
-  ipcMain.on('load-translation-service', (event) => {
-    const service = loadTranslationService();
-    event.reply('translation-service-loaded', service);
-  });
-
-  // Handle translation service setting
-  ipcMain.on('set-translation-service', (event, service) => {
-    saveTranslationService(service);
-  });
-
-  // Handle translation service testing
-  ipcMain.on('test-translation-service', async (event, service) => {
-    try {
-      const result = await testTranslationService(service);
-      if (result.success) {
-        event.reply('service-test-result', true, result.message);
-      } else {
-        event.reply('service-test-result', false, result.message);
-      }
-    } catch (err) {
-      event.reply('service-test-result', false, err.message);
-    }
   });
 
   // Handle selection complete
@@ -421,13 +309,11 @@ app.whenReady().then(() => {
   });
 
   // Handle translation
-  ipcMain.on('translate-text', async (event, data) => {
-    const { text, service } = data;
-    
-    console.log('Translating text with service:', service);
+  ipcMain.on('translate-text', async (event, text) => {
+    console.log('Translating text with MyMemory');
     
     try {
-      const translatedText = await translateText(text, service);
+      const translatedText = await translateText(text);
       // Use event.reply instead of mainWindow.webContents.send
       event.reply('translation-result', translatedText);
     } catch (error) {
