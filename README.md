@@ -12,7 +12,7 @@ Install dependencies with `npm install` and ensure `deu.traineddata` is in the r
 
 ## Usage
 
-Start the application with `npm start` or `npx electron .` then press `Ctrl+Shift+T` to activate screen capture mode, select text region, and view translation results.
+Start the application with `npx electron .` then press `Ctrl+Shift+T` to activate screen capture mode, select text region, and view translation results.
 
 ## Technology Stack
 
