@@ -1,4 +1,4 @@
-# My Project
+# German Translator
 
 This project is designed to serve as the main entry point for the application. It contains the core logic and configuration for the project. 
 
