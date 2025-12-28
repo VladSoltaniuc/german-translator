@@ -1,27 +1,23 @@
-# My Project
+# German Translator
 
-This project is designed to serve as the main entry point for the application. It contains the core logic and configuration for the project. 
+Desktop application built with Electron for translating German text from screen captures using OCR technology.
+
+## Features
+
+Use the global hotkey `Ctrl+Shift+T` (or `Cmd+Shift+T` on macOS) to capture any screen region, extract German text via OCR, and get instant translation.
 
 ## Installation
 
-To install the necessary dependencies, run:
-
-```
-npm install
-```
+Install dependencies with `npm install` and ensure `deu.traineddata` is in the root directory for Tesseract OCR.
 
 ## Usage
 
-To start the application, use the following command:
+Start the application with `npm start` or `npx electron .` then press `Ctrl+Shift+T` to activate screen capture mode, select text region, and view translation results.
 
-```
-npm start
-```
+## Technology Stack
 
-## Contributing
-
-Feel free to submit issues and pull requests to improve the project. 
+Built with Electron, Tesseract.js for OCR recognition, and integration with translation API services.
 
 ## License
 
-This project is licensed under the MIT License.
+MIT License
