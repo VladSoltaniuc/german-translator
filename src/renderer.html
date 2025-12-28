@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>German Translator</title>
+  <link rel="stylesheet" href="renderer.css">
+</head>
+<body>
+  <div id="status">
+    Press <strong>Ctrl+Shift+T</strong> to capture screenshot
+  </div>
+
+  <div class="progress" id="progress">
+    <div class="progress-bar" id="progressBar">0%</div>
+  </div>
+
+  <div class="container">
+    <div class="panel">
+      <h2>Translation (English)</h2>
+      <div id="translatedText">Translated text will appear here...</div>
+      <div id="warningMessage" class="warning-message">
+        Only the first 500 characters were translated due to service limits
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Selected Region</h2>
+      <div id="imagePlaceholder" class="image-placeholder">Image will be displayed here</div>
+      <div id="imageContainer" class="image-container" style="display:none;">
+        <img id="screenshot">
+      </div>
+    </div>
+    <div class="panel panel-full">
+      <h2>Original (German)</h2>
+      <div id="ocrText">Original text will appear here...</div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
